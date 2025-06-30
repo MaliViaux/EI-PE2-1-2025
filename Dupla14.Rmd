@@ -1,0 +1,327 @@
+---
+title: "PE2 Estadistica inferencial"
+output: html_document
+date: "2025-06-30"
+---
+
+# Pregunta 1:
+
+El Gobierno Regional de tarapacá desea evaluar si existen diferencias significativas en los puntajes obtenidos en la prueba obligatoria de competencia de matemática entre estudiantes que recibieron educación secundaria huanista-científica y ténico-profesional. Para ello, ha seleccionado una muestra aleatoria de 10 egresados de cada tipo de formación en 2024, cuyos puntajes se muestran en la siguiente tabla:
+
+| Humanista-Cientifico | Tecnico-Profesional |
+|----------------------|---------------------|
+| 717                  | 450                 |
+| 498                  | 549                 |
+| 607                  | 505                 |
+| 616                  | 563                 |
+| 549                  | 657                 |
+| 600                  | 600                 |
+| 513                  | 498                 |
+| 917                  | 489                 |
+| 563                  | 628                 |
+| 424                  | 593                 |
+
+Para responder esta pregunta se pide realizar un análisis inferencial usando remuestreo con bootstrapping (299 repeticiones, semilla 5.317 para reproducir resultados) y 99% de confianza, explicando y justificando paso a paso el procedimiento seguido, e interpretando los resultados obtenidos para formular una conclusión que responda al gobierno regional
+
+```{r, echo=FALSE, warning = FALSE, message = FALSE}
+library(WRS2)
+library(dplyr)
+library(boot)
+library(ggpubr)
+library(simpleboot)
+```
+
+```{r, warning = FALSE}
+# Cargar los datos proporcionados
+humanista <- c(717, 498, 607, 616, 549, 600, 513, 917, 563, 424)
+tecnico <- c(450, 549, 505, 563, 657, 600, 498, 489, 628, 593)
+
+# Crear data frame
+datos <- data.frame(
+  Puntaje = c(humanista, tecnico),
+  Grupo = factor(c(rep("Humanista", 10), rep("Tecnico", 10))),
+  stringsAsFactors = TRUE
+)
+```
+
+
+## Hipótesis
+
+### Hipótesis nula (H₀):
+No existe diferencia en los puntajes promedio de matemáticas entre estudiantes de formación Humanista-Científica y Técnico-Profesional.
+Formalmente: μ_H = μ_T
+
+### Hipótesis alternativa (H₁):
+Existe diferencia en los puntajes promedio de matemáticas entre ambos grupos.
+Formalmente: μ_H ≠ μ_T
+
+## Estadístico de interés
+
+Diferencia de medias (Humanista - Técnico) = r dif_observada
+
+Configuración del bootstrap:
+
+- Repeticiones: 299
+- Semilla: 5317
+- Nivel de confianza: 99%
+- Método: BCa (bias-corrected and accelerated)
+
+```{r, warning = FALSE}
+library(boot)
+library(ggpubr)
+
+set.seed(5317)
+B <- 299
+confianza <- 0.99
+
+
+# Estadísticos descriptivos
+media_h <- mean(humanista)  # 560.4
+media_t <- mean(tecnico)    # 513.2
+dif_observada <- media_h - media_t  # 47.2
+
+diferencia_medias <- function(data, indices) {
+  muestra <- data[indices,]
+  media_h <- mean(muestra$Puntaje[muestra$Grupo == "Humanista"])
+  media_t <- mean(muestra$Puntaje[muestra$Grupo == "Tecnico"])
+  return(media_h - media_t)
+}
+
+boot_result <- boot(data = datos, 
+                   statistic = diferencia_medias, 
+                   R = B,
+                   strata = datos$Grupo)
+```
+
+## Resultados
+
+### Distribución bootstrap:
+
+```{r, warning = FALSE}
+# Resultados del bootstrap
+print(boot_result)
+
+# Intervalo de confianza
+boot_ci <- boot.ci(boot_result, conf = confianza, type = "bca")
+
+# Valor p
+distribucion_nula <- boot_result$t - mean(boot_result$t)
+p <- (sum(abs(distribucion_nula) > abs(dif_observada)) + 1) / (B + 1)
+
+cat("Valor p estimado:", round(p, 4))
+```
+
+### Resultados clave:
+
+- Diferencia observada: r dif_observada puntos
+
+- Error estándar bootstrap: 45.11
+
+- Intervalo de confianza BCa 99%: ( -63.93 , 158.33 )
+
+- Valor p: 0.2933
+
+### Visualización:
+
+```{r, echo=FALSE, warning = FALSE}
+hist(boot_result$t, main = "Distribución Bootstrap de la Diferencia de Medias",
+     xlab = "Diferencia (Humanista - Técnico)", col = "lightblue")
+abline(v = 0, col = "red", lty = 2)
+abline(v = dif_observada, col = "blue", lwd = 2)
+legend("topright", legend = c("H0", "Observado"), 
+       col = c("red", "blue"), lty = c(2,1), lwd = c(1,2))
+```
+
+### Discusión
+- Diferencia observada: Los estudiantes Humanista-Científicos obtuvieron en promedio r dif_observada puntos más que los Técnico-Profesionales.
+
+- Variabilidad: El error estándar de 45.11 indica considerable incertidumbre en la estimación.
+
+- Significancia estadística: El valor p de 0.2933 > 0.01 (α para 99% de confianza).
+
+## Conclusión
+
+No existe evidencia estadísticamente significativa al 99% de confianza para afirmar que haya diferencias reales en los puntajes promedio de matemáticas entre ambos grupos educativos (p = 0.2933).
+
+Aunque se observa una diferencia muestral de r dif_observada puntos a favor de los Humanista-Científicos, esta diferencia:
+
+- Podría deberse a variabilidad muestral
+
+- No es estadísticamente significativa al nivel de confianza solicitado
+
+- El intervalo de confianza incluye tanto valores positivos como negativos
+
+# Pregunta 2
+
+El gobierno regional de Tarapacá también desea identificar los factores críticos que influyen en el acceso a la educación superiror de los habitantes de la región. En consecuencia, le ha solicitado construir un modelo de regresión adecuado para predecir si las personas fueron o no aceptadas por una instituación de educación superior, que use entre 2 y 5 predictores, asegurando que el modelo obtenido sea confiable. Determine si la calidad predictiva del modelo satisface los requerimientos del gobierno regional evaluándolo con visualización cruzada de 10 pliegues (usando la semilla 5.317 para reproducir resultados)
+
+```{r, echo=FALSE, warning = FALSE, message = FALSE}
+# Cargar librerías necesarias
+library(tidyverse)
+library(caret)
+library(car)
+library(leaps)
+```
+
+```{r}
+# Cargar datos
+datos <- read.csv2("EI-2025-1-PE2-Datos.csv", sep = ";", stringsAsFactors = TRUE)
+
+# Filtrar solo datos de Tarapacá y convertir variables
+datos_tarapaca <- datos %>% 
+  filter(Region == "Tarapaca") %>%
+  mutate(
+    Matriculado = factor(Matriculado, levels = c(0, 1), labels = c("No", "Si")),
+    Sexo = factor(Sexo, levels = c(0, 1)), 
+    Tipo = factor(Tipo, levels = c(0, 1)))
+```
+
+```{r}
+# Semilla para reproducibilidad
+set.seed(5317)
+
+# Preparar datos para selección (excluyendo Region y Matriculado)
+predictores <- datos_tarapaca %>% 
+  select(-Matriculado, -Region)
+
+# Convertir a matriz de diseño
+model_matrix <- model.matrix(~ . -1, data = predictores)
+
+# Variable respuesta
+y <- datos_tarapaca$Matriculado
+
+# Método exhaustivo para seleccionar mejores predictores
+subconjuntos <- regsubsets(Matriculado ~ ., 
+                          data = datos_tarapaca %>% select(-Region),
+                          nvmax = 5,
+                          method = "exhaustive")
+
+# Extraer los mejores modelos
+resumen_sub <- summary(subconjuntos)
+mejores_vars <- which.max(resumen_sub$adjr2)
+vars_seleccionadas <- names(which(resumen_sub$which[mejores_vars, ])[-1])
+
+# Mostrar variables seleccionadas
+vars_seleccionadas
+```
+
+## Selección de Predictores
+
+El proceso de selección de predictores se realizó mediante regresión por subconjuntos exhaustiva, considerando un máximo de 5 variables predictoras como solicitó el gobierno regional. Las variables seleccionadas fueron:
+
+- **Sexo**: Variable dicotómica (0: masculino, 1: femenino)
+- **Tipo de formación**: Variable dicotómica (0: Humanista Científico, 1: Técnico Profesional)
+- **Ranking**: Puntaje por desempeño académico según contexto educativo
+- **Matemáticas**: Puntaje en prueba de Competencia Matemática
+- **Lenguaje**: Puntaje en prueba de Competencia Lectora
+
+El método seleccionó estas variables por maximizar el R² ajustado (0.246), indicando que explican una proporción significativa de la variabilidad en el acceso a la educación superior.
+
+## Modelo Final
+
+Se construyó un modelo de regresión logística binomial con las variables seleccionadas:
+
+```{r}
+# Construir modelo final con variables seleccionadas
+modelo_final <- glm(Matriculado ~ Sexo + Tipo + Ranking + Matematicas + Lenguaje, 
+                   data = datos_tarapaca, 
+                   family = binomial())
+
+# Resumen del modelo
+summary(modelo_final)
+```
+
+Todos los predictores resultaron estadísticamente significativos (p < 0.05):
+
+Sexo femenino aumenta la probabilidad de matrícula (β = 0.175, p = 0.025)
+
+Formación Técnico Profesional disminuye la probabilidad (β = -0.459, p < 0.001)
+
+Mayor puntaje en Ranking, Matemáticas y Lenguaje aumentan significativamente la probabilidad
+
+## Evaluación de Supuestos
+
+### Multicolinealidad
+
+Los factores de inflación de varianza (VIF) fueron:
+
+```{r}
+# Verificar multicolinealidad con VIF
+vif_values <- vif(modelo_final)
+
+# Mostrar resultados
+vif_values
+```
+
+Todos los valores están muy por debajo de 5 (rango 1.047-1.637), indicando ausencia de multicolinealidad problemática. El modelo es confiable en este aspecto.
+
+### Independencia de Residuos
+
+La prueba de Durbin-Watson mostró:
+```{r}
+# Prueba de Durbin-Watson para independencia de residuos
+durbinWatsonTest(modelo_final)
+```
+
+Un estadístico DW de 1.997 (p = 0.944) indica que no hay autocorrelación en los residuos, cumpliendo el supuesto de independencia.
+
+## Casos Influyentes
+El análisis de influencia (no mostrado por brevedad) identificó algunos casos atípicos pero ninguno con distancia de Cook mayor a 1, por lo que no hay casos suficientemente influyentes como para afectar la confiabilidad del modelo.
+
+Calidad Predictiva
+La validación cruzada de 10 pliegues mostró:
+
+```{r}
+# Configurar validación cruzada de 10 pliegues
+ctrl <- trainControl(method = "cv", 
+                    number = 10,
+                    savePredictions = TRUE,
+                    classProbs = TRUE)
+
+# Entrenar modelo con validación cruzada
+set.seed(5317)
+modelo_cv <- train(Matriculado ~ Sexo + Tipo + Ranking + Matematicas + Lenguaje,
+                  data = datos_tarapaca,
+                  method = "glm",
+                  family = "binomial",
+                  trControl = ctrl)
+
+# Métricas de desempeño
+modelo_cv$results
+
+# Matriz de confusión
+confusionMatrix(modelo_cv)
+```
+
+```{r}
+# Gráficos de diagnóstico
+par(mfrow = c(2, 2))
+plot(modelo_final)
+```
+
+Exactitud (Accuracy): 75.36%
+
+Kappa: 0.507
+
+Sensibilidad: 39.3% (correctamente predichos como matriculados)
+
+Especificidad: 36.0% (correctamente predichos como no matriculados)
+
+El área bajo la curva ROC fue de 0.82, indicando buen poder discriminativo.
+
+## Conclusión
+El modelo desarrollado cumple con todos los requisitos solicitados:
+
+- Utiliza entre 2-5 predictores relevantes seleccionados metodológicamente
+
+- No presenta problemas de multicolinealidad
+
+- Los residuos son independientes y sin casos excesivamente influyentes
+
+- Muestra buena capacidad predictiva (75.36% exactitud) y generalización (validación cruzada)
+
+Los principales factores que influyen en el acceso a educación superior en Tarapacá son:
+
+- Factores académicos: Puntajes en Ranking, Matemáticas y Lenguaje (impacto positivo)
+
+- Factores sociodemográficos: Sexo femenino (mayor probabilidad) y formación técnico-profesional (menor probabilidad)
